@@ -15,28 +15,32 @@ type TodoService interface {
 	Delete(id uint) error
 }
 
-type todoServiceImp struct {
-	db *gorm.DB
+type TodoServiceImp struct {
+	Db *gorm.DB
 }
 
 func NewTodoService() TodoService {
-	return &todoServiceImp{
-		db: db.GetDB(),
+	return &TodoServiceImp{
+		Db: db.GetDB(),
 	}
 }
 
-func (tds *todoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
+func (tds *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
 	todo.CreatedAt = time.Now()
-	if err := tds.db.Create(&todo).Error; err != nil {
-		return models.TodoModel{}, err
-
+	tx := tds.Db.Begin()
+	if tx.Error != nil {
+		return models.TodoModel{}, tx.Error
 	}
-	return todo, nil
+	if err := tx.Create(&todo).Error; err != nil {
+		tx.Rollback()
+		return models.TodoModel{}, errors.New("todo not created")
+	}
+	return todo, tx.Commit().Error
 }
 
-func (tds *todoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
+func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
 	var existingTodo models.TodoModel
-	if err := tds.db.First(&existingTodo, id).Error; err != nil {
+	if err := tds.Db.First(&existingTodo, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.TodoModel{}, errors.New("todo not found")
 		}
@@ -44,15 +48,26 @@ func (tds *todoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoMo
 	}
 
 	todo.UpdatedAt = time.Now()
-	if err := tds.db.Model(&existingTodo).Updates(todo).Error; err != nil {
+	if err := tds.Db.Model(&existingTodo).Updates(todo).Error; err != nil {
 		return models.TodoModel{}, err
 	}
 	return existingTodo, nil
 }
 
-func (tds *todoServiceImp) Delete(id uint) error {
-	if err := tds.db.Delete(&models.TodoModel{}, id).Error; err != nil {
+func (s *TodoServiceImp) Delete(id uint) error {
+	if id == 0 {
+		return errors.New("invalid ID")
+	}
+
+	tx := s.Db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if err := tx.Delete(&models.TodoModel{}, id).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
-	return nil
+
+	return tx.Commit().Error
 }
