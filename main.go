@@ -17,8 +17,7 @@ import (
 const port = ":9000"
 
 func main() { //point d'entre
-	db.Init()                     // Initialise la connexion à la base de données
-	controllers.InitRenderAndDB() // Initialise le moteur de rendu et la base de données pour les contrôleurs
+	db.Init() // Initialise la connexion à la base de données
 	stopChan := make(chan os.Signal)
 	signal.Notify(stopChan, os.Interrupt)
 

@@ -9,6 +9,8 @@ require (
 	gorm.io/gorm v1.25.10
 )
 
+require github.com/golang/mock v1.6.0 // indirect
+
 require github.com/DATA-DOG/go-sqlmock v1.5.2 // direct
 
 require (

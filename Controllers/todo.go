@@ -1,26 +1,31 @@
 package Controllers
 
 import (
-	"encoding/json" //convertir les donnees go en json et vice versa
-	"fmt"
+	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	models "github.com/go-todo1/Models"
-	"github.com/go-todo1/db"
+	"github.com/go-todo1/services"
 	"github.com/thedevsaddam/renderer"
-	"gorm.io/gorm" // Il permet de manipuler la base de données  on utilisant go au lieu de sql
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
-var rnd *renderer.Render
+var rnd *renderer.Render = renderer.New()
+var todoService services.TodoService = services.NewTodoService()
 var Database *gorm.DB
 
-func InitRenderAndDB() {
-	rnd = db.GetRenderer()
-	Database = db.GetDB()
+func InitDatabase() {
+	var err error
+	dsn := "user:password@tcp(127.0.0.1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+	Database, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
+	}
 }
 
 func FetchTodos(w http.ResponseWriter, r *http.Request) {
@@ -41,8 +46,20 @@ func FetchTodos(w http.ResponseWriter, r *http.Request) {
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		log.Printf("Error decoding JSON: %v", err) // Log the error
-		rnd.JSON(w, http.StatusProcessing, err)
+		var unmarshalTypeError *json.UnmarshalTypeError
+		if errors.As(err, &unmarshalTypeError) {
+			log.Printf("Error decoding JSON: %v", err)
+			rnd.JSON(w, http.StatusBadRequest, renderer.M{
+				"message": "Invalid ID",
+				"error":   err.Error(),
+			})
+			return
+		}
+		log.Printf("Error decoding JSON: %v", err)
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid request",
+			"error":   err.Error(),
+		})
 		return
 	}
 	if t.Title == "" {
@@ -51,57 +68,63 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	t.CreatedAt = time.Now()
-	if err := Database.Create(&t).Error; err != nil {
-		log.Printf("Error creating todo: %v", err) // Log the error
-		rnd.JSON(w, http.StatusProcessing, renderer.M{
+	createdTodo, err := todoService.Create(t)
+	if err != nil {
+		log.Printf("Error creating todo: %v", err)
+		rnd.JSON(w, http.StatusInternalServerError, renderer.M{
 			"message": "Failed to save todo",
-			"error":   err,
+			"error":   err.Error(),
 		})
 		return
 	}
 	rnd.JSON(w, http.StatusCreated, renderer.M{
 		"message": "todo created successfully",
-		"todo_id": t.ID,
+		"todo_id": createdTodo.ID,
 	})
 }
 
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
+
 	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		fmt.Printf("error : %s", err.Error())
+		log.Printf("Error parsing ID: %v", err)
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
-
-	if err := Database.Delete(&models.TodoModel{}, id).Error; err != nil {
-		fmt.Printf("error : %s", err.Error())
+	if err := todoService.Delete(uint(id)); err != nil {
+		log.Printf("Error deleting todo: %v", err)
 		http.Error(w, "Error deleting todo with ID "+idStr+": "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Todo deleted successfully"))
-	return
 }
 
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing ID: %v", err)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		log.Printf("Error decoding JSON: %v", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-	if err := Database.Model(&models.TodoModel{}).Where("id = ?", id).Updates(t).Error; err != nil {
-		log.Printf("Error updating todo with ID %s: %v", id, err)
+
+	updatedTodo, err := todoService.Update(uint(id), t)
+	if err != nil {
+		log.Printf("Error updating todo: %v", err)
 		http.Error(w, "Failed to update todo", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Todo with ID %s updated successfully", id)
-	response := map[string]string{"message": "todo updated successfully"}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	log.Printf("Todo with ID %d updated successfully", id)
+	rnd.JSON(w, http.StatusOK, renderer.M{
+		"message": "todo updated successfully",
+		"todo":    updatedTodo,
+	})
 }

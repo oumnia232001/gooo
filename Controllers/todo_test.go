@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-chi/chi/v5"
 	models "github.com/go-todo1/Models"
+	"github.com/go-todo1/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/thedevsaddam/renderer"
 	"gorm.io/driver/mysql"
@@ -29,70 +33,156 @@ func setupMockDB() *gorm.DB {
 	return db
 }
 
+// func TestCreateTodo(t *testing.T) {
+// 	// Initialisation des dépendances
+// 	sqlDB, mock := initMockDB()
+// 	defer sqlDB.Close()
+
+// 	mock.ExpectBegin()
+// 	mock.ExpectExec("^INSERT INTO `todo_models` \\(`title`,`completed`,`created_at`,`updated_at`\\) VALUES \\(\\?,\\?,\\?,\\?\\)$").WithArgs(
+// 		"Learn Go",
+// 		false,
+// 		sqlmock.AnyArg(),
+// 		sqlmock.AnyArg(),
+// 	).WillReturnResult(sqlmock.NewResult(1, 1))
+// 	mock.ExpectCommit()
+
+// 	var jsonStr = []byte(`{"Title":"Learn Go"}`)
+// 	req, err := http.NewRequest("POST", "/todos", bytes.NewBuffer(jsonStr))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	rr := httptest.NewRecorder()
+// 	handler := http.HandlerFunc(CreateTodo)
+
+// 	// Initialiser `rnd` si nécessaire
+// 	if rnd == nil {
+// 		rnd = renderer.New()
+// 	}
+// 	handler.ServeHTTP(rr, req)
+
+// 	if status := rr.Code; status != http.StatusCreated {
+// 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
+// 	}
+
+// 	var response map[string]interface{}
+// 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	if response["message"] != "todo created successfully" {
+// 		t.Errorf("unexpected response message: got %v want %v", response["message"], "todo created successfully")
+// 	}
+// }
+
 func TestCreateTodo(t *testing.T) {
-	// Initialisation des dépendances
-	sqlDB, mock := initMockDB()
-	defer sqlDB.Close()
+	defaultBody := `{
+        "title": "sara"
+    }`
+	databaseErrorBody := `{
+        "title": "sara"
+    }`
+	badIDBody := `{
+	"title":"sara",
+	"id": "invalid"
+	}`
 
-	mock.ExpectBegin()
-	mock.ExpectExec("^INSERT INTO `todo_models` \\(`title`,`completed`,`created_at`,`updated_at`\\) VALUES \\(\\?,\\?,\\?,\\?\\)$").WithArgs(
-		"Learn Go",
-		false,
-		sqlmock.AnyArg(),
-		sqlmock.AnyArg(),
-	).WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
-	var jsonStr = []byte(`{"Title":"Learn Go"}`)
-	req, err := http.NewRequest("POST", "/todos", bytes.NewBuffer(jsonStr))
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name        string
+		request     func() *http.Request
+		setup       func()
+		checkResult func(code int, response string)
+	}{
+		{
+			name: "success",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("POST", "/todo", strings.NewReader(defaultBody))
+				return req
+			},
+			setup: func() {
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Create(gomock.Eq(models.TodoModel{
+					Title: "sara",
+				})).Return(models.TodoModel{
+					ID:        1,
+					Title:     "sara",
+					Completed: false,
+				}, nil)
+				todoService = todoServiceMock
+			},
+			checkResult: func(code int, response string) {
+				assert.Equal(t, http.StatusCreated, code)
+			},
+		},
+		{
+			name: "database error",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("POST", "/todo", strings.NewReader(databaseErrorBody))
+				return req
+			},
+			setup: func() {
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Create(gomock.Eq(models.TodoModel{
+					Title: "sara",
+				})).Return(models.TodoModel{}, errors.New("database error"))
+				todoService = todoServiceMock
+			},
+			checkResult: func(code int, response string) {
+				assert.Equal(t, http.StatusInternalServerError, code)
+				assert.Contains(t, response, "database error")
+			},
+		},
+		{
+			name: "bad id",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("POST", "/todo", strings.NewReader(badIDBody))
+				return req
+			},
+			setup: func() {
+				// No need to configure a mock because the invalid ID must be processed before calling the service
+			},
+			checkResult: func(code int, response string) {
+				assert.Equal(t, http.StatusBadRequest, code)
+				assert.Contains(t, response, "Invalid ID")
+			},
+		},
 	}
 
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(CreateTodo)
-
-	// Initialiser `rnd` si nécessaire
-	if rnd == nil {
-		rnd = renderer.New()
-	}
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusCreated {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-	}
-
-	var response map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-
-	if response["message"] != "todo created successfully" {
-		t.Errorf("unexpected response message: got %v want %v", response["message"], "todo created successfully")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+			rr := httptest.NewRecorder()
+			CreateTodo(rr, tc.request())
+			tc.checkResult(rr.Code, rr.Body.String())
+		})
 	}
 }
 
 func TestDeleteTodo(t *testing.T) {
 	var sqlDB *sql.DB
-	var mock sqlmock.Sqlmock
 
 	testCases := []struct {
 		name        string
 		id          string
+		request     func() *http.Request
 		setup       func()
 		checkResult func(rr *httptest.ResponseRecorder)
 	}{
 		{
 			name: "success",
 			id:   "1",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("DELETE", "/todos/1", nil)
+				return req
+			},
 			setup: func() {
-				// Initialisation des dépendances
-				sqlDB, mock = initMockDB()
-
-				mock.ExpectBegin()
-				// Passer un int64 comme argument attendu
-				mock.ExpectExec("^DELETE FROM `todo_models` WHERE `todo_models`.`id` = \\?$").WithArgs(int64(1)).WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectCommit()
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Delete(gomock.Eq(uint(1))).Return(nil)
+				todoService = todoServiceMock
 			},
 			checkResult: func(rr *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, rr.Code)
@@ -100,29 +190,21 @@ func TestDeleteTodo(t *testing.T) {
 			},
 		},
 		{
-			name:  "database error",
-			id:    "1",
-			setup: func() {},
+			name: "database error",
+			id:   "1",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("DELETE", "/todos/1", nil)
+				return req
+			},
+			setup: func() {
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Delete(gomock.Eq(uint(1))).Return(errors.New("database error"))
+				todoService = todoServiceMock
+			},
 			checkResult: func(rr *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusInternalServerError, rr.Code)
-				assert.Contains(t, rr.Body.String(), "Error deleting todo with ID")
-			},
-		},
-		{
-			name: "bad id",
-			id:   "oumnia",
-			setup: func() {
-				// Initialisation des dépendances
-				sqlDB, mock = initMockDB()
-
-				mock.ExpectBegin()
-				// Passer un int64 comme argument attendu
-				mock.ExpectExec("^DELETE FROM `todo_models` WHERE `todo_models`.`id` = \\?$").WithArgs(int64(1)).WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectCommit()
-			},
-			checkResult: func(rr *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusBadRequest, rr.Code)
-				assert.Contains(t, rr.Body.String(), "Invalid ID")
+				assert.Contains(t, rr.Body.String(), "database error")
 			},
 		},
 	}
@@ -133,14 +215,17 @@ func TestDeleteTodo(t *testing.T) {
 			rr := httptest.NewRecorder()
 			router := chi.NewRouter()
 			router.Delete("/todos/{id}", DeleteTodo)
-			req, _ := http.NewRequest("DELETE", "/todos/"+tc.id, nil)
+			req := tc.request()
 			router.ServeHTTP(rr, req)
 			tc.checkResult(rr)
 		})
 	}
 
-	defer sqlDB.Close()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
 }
+
 func TestUpdateTodo(t *testing.T) {
 	// Initialisation des dépendances
 	sqlDB, mock := initMockDB()

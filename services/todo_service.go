@@ -29,14 +29,19 @@ func (tds *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, erro
 	todo.CreatedAt = time.Now()
 	tx := tds.Db.Begin()
 	if tx.Error != nil {
+		// !=different  de (Opérateur de comparaison)
 		return models.TodoModel{}, tx.Error
 	}
 	if err := tx.Create(&todo).Error; err != nil {
+		// ; fin de condition
 		tx.Rollback()
+		//Rollback pout annuler transaction
 		return models.TodoModel{}, errors.New("todo not created")
 	}
 	return todo, tx.Commit().Error
 }
+
+//tx : transaction
 
 func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
 	var existingTodo models.TodoModel
