@@ -109,6 +109,7 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
+
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		log.Printf("Error decoding JSON: %v", err)

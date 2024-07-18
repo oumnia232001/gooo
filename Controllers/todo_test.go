@@ -1,23 +1,20 @@
 package Controllers
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-chi/chi/v5"
 	models "github.com/go-todo1/Models"
 	"github.com/go-todo1/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/thedevsaddam/renderer"
-	"gorm.io/driver/mysql"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -33,45 +30,6 @@ func setupMockDB() *gorm.DB {
 	return db
 }
 
-// func TestCreateTodo(t *testing.T) {
-// 	// Initialisation des dépendances
-// 	sqlDB, mock := initMockDB()
-// 	defer sqlDB.Close()
-
-// 	mock.ExpectBegin()
-// 	mock.ExpectExec("^INSERT INTO `todo_models` \\(`title`,`completed`,`created_at`,`updated_at`\\) VALUES \\(\\?,\\?,\\?,\\?\\)$").WithArgs(
-// 		"Learn Go",
-// 		false,
-// 		sqlmock.AnyArg(),
-// 		sqlmock.AnyArg(),
-// 	).WillReturnResult(sqlmock.NewResult(1, 1))
-// 	mock.ExpectCommit()
-
-// 	var jsonStr = []byte(`{"Title":"Learn Go"}`)
-// 	req, err := http.NewRequest("POST", "/todos", bytes.NewBuffer(jsonStr))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	rr := httptest.NewRecorder()
-// 	handler := http.HandlerFunc(CreateTodo)
-
-// 	// Initialiser `rnd` si nécessaire
-// 	if rnd == nil {
-// 		rnd = renderer.New()
-// 	}
-// 	handler.ServeHTTP(rr, req)
-
-// 	if status := rr.Code; status != http.StatusCreated {
-// 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-// 	}
-
-// 	var response map[string]interface{}
-// 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	if response["message"] != "todo created successfully" {
 // 		t.Errorf("unexpected response message: got %v want %v", response["message"], "todo created successfully")
 // 	}
 // }
@@ -227,63 +185,79 @@ func TestDeleteTodo(t *testing.T) {
 }
 
 func TestUpdateTodo(t *testing.T) {
-	// Initialisation des dépendances
-	sqlDB, mock := initMockDB()
-	defer sqlDB.Close()
+	var sqlDB *sql.DB
 
-	// Définition les attentes pour la base de données simulée
-	mock.ExpectBegin()
-	mock.ExpectExec("^UPDATE `todo_models` SET `title`=?, `completed`=?, `created_at`=?, `updated_at`=? WHERE `id` = \\?$").
-		WithArgs("Learn Go Updated", false, sqlmock.AnyArg(), sqlmock.AnyArg(), int64(1)).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
-	// Créeation d'une requête HTTP PUT
-	var jsonStr = []byte(`{"Title":"Learn Go Updated","Completed":false}`)
-	req, err := http.NewRequest("PUT", "/todos/1", bytes.NewBuffer(jsonStr))
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name        string
+		id          string
+		request     func() *http.Request
+		setup       func()
+		checkResult func(rr *httptest.ResponseRecorder)
+	}{
+		{
+			name: "success",
+			id:   "1",
+			request: func() *http.Request {
+				body := `{"title":"Updated Title","completed":true}`
+				req, _ := http.NewRequest("PUT", "/todos/1", strings.NewReader(body))
+				return req
+			},
+			setup: func() {
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Update(uint(1), models.TodoModel{
+					Title:     "Updated Title",
+					Completed: true,
+				}).Return(models.TodoModel{
+					ID:        1,
+					Title:     "Updated Title",
+					Completed: true,
+				}, nil)
+				todoService = todoServiceMock
+			},
+			checkResult: func(rr *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, rr.Code)
+				assert.Contains(t, rr.Body.String(), "todo updated successfully")
+			},
+		},
+		{
+			name: "database error",
+			id:   "1",
+			request: func() *http.Request {
+				body := `{"title":"Updated Title","completed":true}`
+				req, _ := http.NewRequest("PUT", "/todos/1", strings.NewReader(body))
+				return req
+			},
+			setup: func() {
+				ctrl := gomock.NewController(t)
+				todoServiceMock := mocks.NewMockTodoService(ctrl)
+				todoServiceMock.EXPECT().Update(gomock.Eq(uint(1)), gomock.Eq(models.TodoModel{
+					Title:     "Updated Title",
+					Completed: true,
+				})).Return(models.TodoModel{}, fmt.Errorf("database error"))
+				todoService = todoServiceMock
+			},
+			checkResult: func(rr *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusInternalServerError, rr.Code)
+				assert.Contains(t, rr.Body.String(), "Failed to update todo")
+			},
+		},
+		// Ajoutez d'autres cas de test si nécessaire
 	}
 
-	rr := httptest.NewRecorder()
-	router := chi.NewRouter()
-	router.Put("/todos/{id}", UpdateTodo)
-
-	// Initialisation `rnd` si nécessaire
-	if rnd == nil {
-		rnd = renderer.New()
-	}
-	router.ServeHTTP(rr, req)
-
-	// Vérification le code de réponse
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+			rr := httptest.NewRecorder()
+			router := chi.NewRouter()
+			router.Put("/todos/{id}", UpdateTodo)
+			req := tc.request()
+			router.ServeHTTP(rr, req)
+			tc.checkResult(rr)
+		})
 	}
 
-	// Vérification le contenu de la réponse
-	var response map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
+	if sqlDB != nil {
+		defer sqlDB.Close()
 	}
-
-	expectedMessage := "todo updated successfully"
-	if response["message"] != expectedMessage {
-		t.Errorf("unexpected response message: got %v want %v", response["message"], expectedMessage)
-	}
-}
-
-func initMockDB() (*sql.DB, sqlmock.Sqlmock) {
-	mdb, mock, err := sqlmock.New()
-	if err != nil {
-		panic(err)
-	}
-
-	dialector := mysql.New(mysql.Config{
-		SkipInitializeWithVersion: true,
-		DriverName:                "mysql",
-		Conn:                      mdb,
-	})
-
-	Database, _ = gorm.Open(dialector, &gorm.Config{})
-	return mdb, mock
 }

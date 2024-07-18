@@ -3,13 +3,16 @@ module github.com/go-todo1
 go 1.22.4
 
 require (
-	github.com/go-chi/chi/v5 v5.0.13
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/thedevsaddam/renderer v1.2.0
 	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.25.10
+	gorm.io/gorm v1.25.11
 )
 
-require github.com/golang/mock v1.6.0 // indirect
+require (
+	github.com/golang/mock v1.6.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+)
 
 require github.com/DATA-DOG/go-sqlmock v1.5.2 // direct
 
