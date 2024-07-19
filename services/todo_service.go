@@ -19,15 +19,9 @@ type TodoServiceImp struct {
 	Db *gorm.DB
 }
 
-func NewTodoService() TodoService {
-	return &TodoServiceImp{
-		Db: db.GetDB(),
-	}
-}
-
 func (tds *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
 	todo.CreatedAt = time.Now()
-	tx := tds.Db.Begin()
+	tx := db.Database.Begin()
 	if tx.Error != nil {
 		// !=different  de (Opérateur de comparaison)
 		return models.TodoModel{}, tx.Error
@@ -45,7 +39,7 @@ func (tds *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, erro
 
 func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
 	var existingTodo models.TodoModel
-	if err := tds.Db.First(&existingTodo, id).Error; err != nil {
+	if err := db.Database.First(&existingTodo, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.TodoModel{}, errors.New("todo not found")
 		}
@@ -53,7 +47,7 @@ func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoMo
 	}
 
 	todo.UpdatedAt = time.Now()
-	if err := tds.Db.Model(&existingTodo).Updates(todo).Error; err != nil {
+	if err := db.Database.Model(&existingTodo).Updates(todo).Error; err != nil {
 		return models.TodoModel{}, err
 	}
 	return existingTodo, nil
@@ -64,7 +58,7 @@ func (s *TodoServiceImp) Delete(id uint) error {
 		return errors.New("invalid ID")
 	}
 
-	tx := s.Db.Begin()
+	tx := db.Database.Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}

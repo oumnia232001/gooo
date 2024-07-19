@@ -33,7 +33,6 @@ func main() { //point d'entre
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-
 	go func() {
 		log.Println("Listening on port", port)
 		if err := srv.ListenAndServe(); err != nil {

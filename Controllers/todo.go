@@ -2,7 +2,7 @@ package Controllers
 
 import (
 	"encoding/json"
-	"errors"
+	"errors" // Assurez-vous que errors est correctement importé
 	"log"
 	"net/http"
 	"strconv"
@@ -16,9 +16,10 @@ import (
 )
 
 var rnd *renderer.Render = renderer.New()
-var todoService services.TodoService = services.NewTodoService()
+var todoService services.TodoService = &services.TodoServiceImp{}
 var Database *gorm.DB
 
+// InitDatabase initialise la connexion à la base de données
 func InitDatabase() {
 	var err error
 	dsn := "user:password@tcp(127.0.0.1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
@@ -28,13 +29,14 @@ func InitDatabase() {
 	}
 }
 
+// FetchTodos récupère tous les todos
 func FetchTodos(w http.ResponseWriter, r *http.Request) {
 	var todos []models.TodoModel
 	if err := Database.Find(&todos).Error; err != nil {
-		log.Printf("Error fetching todos: %v", err) // Log the error
-		rnd.JSON(w, http.StatusProcessing, renderer.M{
-			"message": "Failed to fetch todo",
-			"error":   err,
+		log.Printf("Error fetching todos: %v", err)
+		rnd.JSON(w, http.StatusInternalServerError, renderer.M{
+			"message": "Failed to fetch todos",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -43,6 +45,7 @@ func FetchTodos(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateTodo crée un nouveau todo
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
@@ -50,7 +53,7 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &unmarshalTypeError) {
 			log.Printf("Error decoding JSON: %v", err)
 			rnd.JSON(w, http.StatusBadRequest, renderer.M{
-				"message": "Invalid ID",
+				"message": "Invalid request payload",
 				"error":   err.Error(),
 			})
 			return
@@ -59,6 +62,12 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		rnd.JSON(w, http.StatusBadRequest, renderer.M{
 			"message": "Invalid request",
 			"error":   err.Error(),
+		})
+		return
+	}
+	if t.ID != 0 {
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "ID should not be provided",
 		})
 		return
 	}
@@ -78,13 +87,13 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rnd.JSON(w, http.StatusCreated, renderer.M{
-		"message": "todo created successfully",
-		"todo_id": createdTodo.ID,
+		"message": "Todo created successfully",
+		"todo":    createdTodo,
 	})
 }
 
+// DeleteTodo supprime un todo par ID
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
-
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -94,38 +103,50 @@ func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := todoService.Delete(uint(id)); err != nil {
 		log.Printf("Error deleting todo: %v", err)
-		http.Error(w, "Error deleting todo with ID "+idStr+": "+err.Error(), http.StatusInternalServerError)
+		if err.Error() == "database error" {
+			http.Error(w, "database error", http.StatusInternalServerError)
+		} else {
+			http.Error(w, "Failed to delete todo", http.StatusInternalServerError)
+		}
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Todo deleted successfully"))
 }
 
+// UpdateTodo met à jour un todo par ID
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idParam)
 	if err != nil {
-		log.Printf("Error parsing ID: %v", err)
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid ID",
+		})
 		return
 	}
 
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		log.Printf("Error decoding JSON: %v", err)
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid request payload",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	updatedTodo, err := todoService.Update(uint(id), t)
 	if err != nil {
 		log.Printf("Error updating todo: %v", err)
-		http.Error(w, "Failed to update todo", http.StatusInternalServerError)
+		rnd.JSON(w, http.StatusInternalServerError, renderer.M{
+			"message": "Failed to update todo",
+			"error":   err.Error(),
+		})
 		return
 	}
-	log.Printf("Todo with ID %d updated successfully", id)
+
 	rnd.JSON(w, http.StatusOK, renderer.M{
-		"message": "todo updated successfully",
+		"message": "Todo updated successfully",
 		"todo":    updatedTodo,
 	})
 }

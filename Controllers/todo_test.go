@@ -42,9 +42,9 @@ func TestCreateTodo(t *testing.T) {
         "title": "sara"
     }`
 	badIDBody := `{
-	"title":"sara",
-	"id": "invalid"
-	}`
+        "title": "sara",
+        "id": "invalid"
+    }`
 
 	testCases := []struct {
 		name        string
@@ -104,7 +104,7 @@ func TestCreateTodo(t *testing.T) {
 			},
 			checkResult: func(code int, response string) {
 				assert.Equal(t, http.StatusBadRequest, code)
-				assert.Contains(t, response, "Invalid ID")
+				assert.Contains(t, response, "Invalid request payload")
 			},
 		},
 	}
@@ -185,8 +185,6 @@ func TestDeleteTodo(t *testing.T) {
 }
 
 func TestUpdateTodo(t *testing.T) {
-	var sqlDB *sql.DB
-
 	testCases := []struct {
 		name        string
 		id          string
@@ -217,7 +215,7 @@ func TestUpdateTodo(t *testing.T) {
 			},
 			checkResult: func(rr *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, rr.Code)
-				assert.Contains(t, rr.Body.String(), "todo updated successfully")
+				assert.Contains(t, rr.Body.String(), "Todo updated successfully")
 			},
 		},
 		{
@@ -242,7 +240,6 @@ func TestUpdateTodo(t *testing.T) {
 				assert.Contains(t, rr.Body.String(), "Failed to update todo")
 			},
 		},
-		// Ajoutez d'autres cas de test si nécessaire
 	}
 
 	for _, tc := range testCases {
@@ -255,9 +252,5 @@ func TestUpdateTodo(t *testing.T) {
 			router.ServeHTTP(rr, req)
 			tc.checkResult(rr)
 		})
-	}
-
-	if sqlDB != nil {
-		defer sqlDB.Close()
 	}
 }

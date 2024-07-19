@@ -12,7 +12,7 @@ func TestInit(t *testing.T) {
 	db.Init()
 
 	// Vérifier que Database est initialisé et non nul
-	assert.NotNil(t, db.GetDB(), "Expected Database to be initialized")
+	assert.NotNil(t, db.Database, "Expected Database to be initialized")
 }
 
 func TestGetRenderer(t *testing.T) {
@@ -31,7 +31,7 @@ func TestGetDB(t *testing.T) {
 	db.Init()
 
 	// Récupérer la base de données
-	database := db.GetDB()
+	database := db.Database
 
 	// Vérifier que la base de données est initialisée et non nulle
 	assert.NotNil(t, database, "Expected Database to be initialized")
