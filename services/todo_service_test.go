@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock" // Assurez-vous d'importer correctement le package des modèles
+	"github.com/DATA-DOG/go-sqlmock"
 	models "github.com/go-todo1/Models"
 	"github.com/go-todo1/services"
 	"github.com/stretchr/testify/assert"
@@ -62,9 +62,9 @@ func TestDeleteTodoService(t *testing.T) {
 		},
 		{
 			name: "bad id",
-			id:   0, // Use an invalid ID (0)
+			id:   0,
 			setup: func() {
-				// No setup for this case
+				// Pas de setup pour ce cas
 			},
 			checkResult: func(err error) {
 				assert.NotNil(t, err)
