@@ -2,9 +2,11 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	models "github.com/go-todo1/Models"
+	"github.com/go-todo1/db"
 	"gorm.io/gorm"
 )
 
@@ -14,26 +16,33 @@ type TodoService interface {
 	Delete(id uint) error
 }
 
-type TodoServiceImp struct {
-	Db *gorm.DB
+func NewTodoServiceImp(db *gorm.DB) *TodoServiceImp {
+	return &TodoServiceImp{Db: db}
 }
 
-func (tds *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
-	todo.CreatedAt = time.Now()
-	tx := tds.Db.Begin()
-	if tx.Error != nil {
-		return models.TodoModel{}, tx.Error
+type TodoServiceImp struct{ Db *gorm.DB }
+
+func (s *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
+	if todo.ID != 0 {
+		return models.TodoModel{}, fmt.Errorf("invalid ID")
 	}
-	if err := tx.Create(&todo).Error; err != nil {
-		tx.Rollback()
-		return models.TodoModel{}, errors.New("todo not created")
-	}
-	return todo, tx.Commit().Error
+	fmt.Println("----------")
+	fmt.Println(&todo)
+	err := s.Db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&todo).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return todo, err
 }
+
+//tx : transaction
 
 func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
 	var existingTodo models.TodoModel
-	if err := tds.Db.First(&existingTodo, id).Error; err != nil {
+	if err := db.Database.First(&existingTodo, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.TodoModel{}, errors.New("todo not found")
 		}
@@ -41,18 +50,18 @@ func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoMo
 	}
 
 	todo.UpdatedAt = time.Now()
-	if err := tds.Db.Model(&existingTodo).Updates(todo).Error; err != nil {
+	if err := db.Database.Model(&existingTodo).Updates(todo).Error; err != nil {
 		return models.TodoModel{}, err
 	}
 	return existingTodo, nil
 }
 
-func (tds *TodoServiceImp) Delete(id uint) error {
+func (s *TodoServiceImp) Delete(id uint) error {
 	if id == 0 {
 		return errors.New("invalid ID")
 	}
 
-	tx := tds.Db.Begin()
+	tx := s.Db.Begin() // Use s.Db instead of db.Database
 	if tx.Error != nil {
 		return tx.Error
 	}

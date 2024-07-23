@@ -10,7 +10,7 @@ require (
 )
 
 require (
-	github.com/golang/mock v1.6.0 // indirect
+	github.com/golang/mock v1.6.0 // direct
 	golang.org/x/text v0.14.0 // indirect
 )
 
