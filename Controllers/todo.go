@@ -2,7 +2,7 @@ package Controllers
 
 import (
 	"encoding/json"
-	"errors" // Assurez-vous que errors est correctement importé
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,20 +16,28 @@ import (
 )
 
 var rnd *renderer.Render = renderer.New()
-var todoService services.TodoService = &services.TodoServiceImp{}
+var todoService services.TodoService
 var Database *gorm.DB
 
-// InitDatabase initialise la connexion à la base de données
+func InitRenderAndDB() {
+	InitDatabase()
+	rnd = renderer.New()
+	todoService = services.NewTodoServiceImp(Database)
+}
+
 func InitDatabase() {
 	var err error
-	dsn := "user:password@tcp(127.0.0.1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "root:12345678@tcp(127.0.0.1:3306)/todo_list?charset=utf8mb4&parseTime=True&loc=Local"
 	Database, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 }
 
-// FetchTodos récupère tous les todos
+func GetRenderer() *renderer.Render {
+	return rnd
+}
+
 func FetchTodos(w http.ResponseWriter, r *http.Request) {
 	var todos []models.TodoModel
 	if err := Database.Find(&todos).Error; err != nil {
@@ -45,7 +53,6 @@ func FetchTodos(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateTodo crée un nouveau todo
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var t models.TodoModel
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
@@ -92,7 +99,6 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteTodo supprime un todo par ID
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -114,7 +120,6 @@ func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Todo deleted successfully"))
 }
 
-// UpdateTodo met à jour un todo par ID
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idParam)

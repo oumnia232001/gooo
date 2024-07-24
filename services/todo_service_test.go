@@ -138,29 +138,29 @@ func TestCreateTodoService(t *testing.T) {
 				assert.Equal(t, false, createdTodo.Completed)
 			},
 		},
-		// {
-		// 	name: "database error",
-		// 	todo: models.TodoModel{
-		// 		Title:     "Test Todo",
-		// 		Completed: false,
-		// 	},
-		// 	setup: func() (*gorm.DB, sqlmock.Sqlmock, *sql.DB, error) {
-		// 		gormDB, mock, sqlDB, err := initMockDB()
-		// 		if err != nil {
-		// 			return nil, nil, nil, err
-		// 		}
-		// 		mock.ExpectBegin()
-		// 		mock.ExpectExec("INSERT INTO `todo_models`").
-		// 			WithArgs(sqlmock.AnyArg(), "Test Todo", false, sqlmock.AnyArg(), sqlmock.AnyArg()). // add arguments for timestamps
-		// 			WillReturnError(gorm.ErrInvalidTransaction)
-		// 		mock.ExpectRollback()
-		// 		return gormDB, mock, sqlDB, nil
-		// 	},
-		// 	checkResult: func(createdTodo models.TodoModel, err error) {
-		// 		assert.NotNil(t, err)
-		// 		assert.Equal(t, gorm.ErrInvalidTransaction.Error(), err.Error())
-		// 	},
-		// },
+		{
+			name: "database error",
+			todo: models.TodoModel{
+				Title:     "Test Todo",
+				Completed: false,
+			},
+			setup: func() (*gorm.DB, sqlmock.Sqlmock, *sql.DB, error) {
+				gormDB, mock, sqlDB, err := initMockDB()
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				mock.ExpectBegin()
+				mock.ExpectExec("INSERT INTO `todo_models`").
+					WithArgs("Test Todo", false, sqlmock.AnyArg(), sqlmock.AnyArg()). // add arguments for timestamps
+					WillReturnError(gorm.ErrInvalidTransaction)
+				mock.ExpectRollback()
+				return gormDB, mock, sqlDB, nil
+			},
+			checkResult: func(createdTodo models.TodoModel, err error) {
+				assert.NotNil(t, err)
+				assert.Equal(t, gorm.ErrInvalidTransaction.Error(), err.Error())
+			},
+		},
 	}
 
 	for _, tc := range testCases {

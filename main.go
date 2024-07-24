@@ -11,20 +11,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	controllers "github.com/go-todo1/Controllers"
-	"github.com/go-todo1/db"
 )
 
 const port = ":9000"
 
-func main() { //point d'entre
-	db.Init() // Initialise la connexion à la base de données
+func main() { // point d'entrée
+	controllers.InitRenderAndDB() // Initialise le moteur de rendu et la base de données pour les contrôleurs
 	stopChan := make(chan os.Signal)
 	signal.Notify(stopChan, os.Interrupt)
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)         //Ajoute un middleware au routeur.
-	r.Get("/", homeHandler)          // enregistr la route de site
-	r.Mount("/todo", todoHandlers()) //sous roteur sur la route
+	r.Use(middleware.Logger)         // Ajoute un middleware au routeur
+	r.Get("/", homeHandler)          // Enregistre la route de la page d'accueil
+	r.Mount("/todo", todoHandlers()) // Sous-routeur pour les TODOs
 
 	srv := &http.Server{
 		Addr:         port,
@@ -33,6 +32,7 @@ func main() { //point d'entre
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
 	go func() {
 		log.Println("Listening on port", port)
 		if err := srv.ListenAndServe(); err != nil {
@@ -49,9 +49,9 @@ func main() { //point d'entre
 }
 
 func todoHandlers() http.Handler {
-	rg := chi.NewRouter() // new router creation
+	rg := chi.NewRouter() // Création d'un nouveau routeur
 
-	//  et ici Définir les routes et les handlers correspondants
+	// Définir les routes et les handlers correspondants
 	rg.Group(func(r chi.Router) {
 		r.Get("/", controllers.FetchTodos)
 		r.Post("/", controllers.CreateTodo)
@@ -62,9 +62,8 @@ func todoHandlers() http.Handler {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	rnd := db.GetRenderer() // récupération  de moteur
-	err := rnd.Template(w, http.StatusOK, []string{"static/home.tpl"}, nil)
+	err := controllers.GetRenderer().Template(w, http.StatusOK, []string{"static/home.tpl"}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-} //fonction qu'il répond aux requêtes HTTP.
+}

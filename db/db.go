@@ -22,7 +22,7 @@ func Init() {
 
 	// Initialize the renderer (  // Initialiser le moteur de rendu)
 	rnd = renderer.New(renderer.Options{
-		ParseGlobPattern: "./static/*.tpl",
+		ParseGlobPattern: "./static/home.tpl",
 	})
 }
 

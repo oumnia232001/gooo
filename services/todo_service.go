@@ -6,7 +6,6 @@ import (
 	"time"
 
 	models "github.com/go-todo1/Models"
-	"github.com/go-todo1/db"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +25,7 @@ func (s *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error)
 	if todo.ID != 0 {
 		return models.TodoModel{}, fmt.Errorf("invalid ID")
 	}
-	fmt.Println("----------")
+
 	fmt.Println(&todo)
 	err := s.Db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&todo).Error; err != nil {
@@ -38,11 +37,9 @@ func (s *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error)
 	return todo, err
 }
 
-//tx : transaction
-
-func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
+func (s *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoModel, error) {
 	var existingTodo models.TodoModel
-	if err := db.Database.First(&existingTodo, id).Error; err != nil {
+	if err := s.Db.First(&existingTodo, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.TodoModel{}, errors.New("todo not found")
 		}
@@ -50,7 +47,7 @@ func (tds *TodoServiceImp) Update(id uint, todo models.TodoModel) (models.TodoMo
 	}
 
 	todo.UpdatedAt = time.Now()
-	if err := db.Database.Model(&existingTodo).Updates(todo).Error; err != nil {
+	if err := s.Db.Model(&existingTodo).Updates(todo).Error; err != nil {
 		return models.TodoModel{}, err
 	}
 	return existingTodo, nil
@@ -61,7 +58,7 @@ func (s *TodoServiceImp) Delete(id uint) error {
 		return errors.New("invalid ID")
 	}
 
-	tx := s.Db.Begin() // Use s.Db instead of db.Database
+	tx := s.Db.Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
