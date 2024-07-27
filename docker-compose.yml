@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:latest
+    container_name: mysql-container-test1
+    environment:
+      MYSQL_ROOT_PASSWORD: 197520012003
+      MYSQL_DATABSE: todo_list
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/setup.sql
+      - mysql-data:/var/lib/mysql
+
+  golang:
+    image: golang:latest
+    container_name: golang-container
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "9000:9000"
+    command: ["go", "run", "main.go"]
+    depends_on:
+      - mysql
+
+volumes:
+  mysql-data:

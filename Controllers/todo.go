@@ -27,7 +27,7 @@ func InitRenderAndDB() {
 
 func InitDatabase() {
 	var err error
-	dsn := "root:12345678@tcp(127.0.0.1:3306)/todo_list?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "root:197520012003@tcp(mysql:3306)/todo_list?charset=utf8mb4&parseTime=True&loc=Local"
 	Database, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)

@@ -1,0 +1,1 @@
+CREATE DATABASE IF NOT EXIST `todo_list`;
