@@ -3,15 +3,20 @@ version: '3.8'
 services:
   mysql:
     image: mysql:latest
-    container_name: mysql-container-test1
-    environment:
-      MYSQL_ROOT_PASSWORD: 197520012003
-      MYSQL_DATABSE: todo_list
     ports:
       - "3307:3306"
-    volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/setup.sql
-      - mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 197520012003
+      MYSQL_DATABASE: todo_list
+      DB_USER: root
+      DB_PASSWORD: 197520012003
+     
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--protocol", "tcp", "-h", "127.0.0.1", "--silent"]
+      timeout: 20s
+      interval: 5s
+      retries: 10
 
   golang:
     image: golang:latest
@@ -24,6 +29,5 @@ services:
     command: ["go", "run", "main.go"]
     depends_on:
       - mysql
-
-volumes:
-  mysql-data:
+   
+    
