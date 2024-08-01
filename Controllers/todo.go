@@ -15,13 +15,15 @@ import (
 	"gorm.io/gorm"
 )
 
-var rnd *renderer.Render = renderer.New()
+var rnd *renderer.Render
 var todoService services.TodoService
 var Database *gorm.DB
 
 func InitRenderAndDB() {
 	InitDatabase()
-	rnd = renderer.New()
+	rnd = renderer.New(renderer.Options{
+		ParseGlobPattern: "static/*.tpl",
+	})
 	todoService = services.NewTodoServiceImp(Database)
 }
 
@@ -32,12 +34,40 @@ func InitDatabase() {
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
+
+	// (Vérifier et migrer la base de données)
+	if !Database.Migrator().HasTable(&models.TodoModel{}) {
+		err = Database.Migrator().CreateTable(&models.TodoModel{})
+		if err != nil {
+			log.Fatalf("Failed to create table: %v", err)
+		}
+	}
+	//add for docker
+	err = Database.AutoMigrate(&models.TodoModel{})
+	if err != nil {
+		log.Fatalf("Failed to auto-migrate database: %v", err)
+	}
+
+	log.Println("Database connected and tables ensured")
 }
 
 func GetRenderer() *renderer.Render {
 	return rnd
 }
 
+type MockRenderer struct{}
+
+func (m *MockRenderer) JSON(w http.ResponseWriter, status int, v interface{}, headers ...http.Header) error {
+	w.WriteHeader(status)
+	_, err := w.Write([]byte("mock json response"))
+	return err
+}
+
+func (m *MockRenderer) Template(w http.ResponseWriter, status int, files []string, data interface{}, headers ...http.Header) error {
+	w.WriteHeader(status)
+	_, err := w.Write([]byte("mock template"))
+	return err
+}
 func FetchTodos(w http.ResponseWriter, r *http.Request) {
 	var todos []models.TodoModel
 	if err := Database.Find(&todos).Error; err != nil {
@@ -93,6 +123,7 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
 	rnd.JSON(w, http.StatusCreated, renderer.M{
 		"message": "Todo created successfully",
 		"todo":    createdTodo,
@@ -124,6 +155,7 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
+		log.Printf("Invalid ID: %v", idParam)
 		rnd.JSON(w, http.StatusBadRequest, renderer.M{
 			"message": "Invalid ID",
 		})
@@ -139,6 +171,8 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	log.Printf("Updating Todo with ID: %d and Data: %+v", id, t)
 
 	updatedTodo, err := todoService.Update(uint(id), t)
 	if err != nil {

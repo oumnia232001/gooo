@@ -14,6 +14,7 @@ import (
 	"github.com/go-todo1/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/thedevsaddam/renderer"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -35,6 +36,7 @@ func setupMockDB() *gorm.DB {
 // }
 
 func TestCreateTodo(t *testing.T) {
+	rnd = renderer.New(renderer.Options{})
 	defaultBody := `{
         "title": "sara"
     }`
@@ -185,6 +187,7 @@ func TestDeleteTodo(t *testing.T) {
 }
 
 func TestUpdateTodo(t *testing.T) {
+	rnd = renderer.New(renderer.Options{})
 	testCases := []struct {
 		name        string
 		id          string

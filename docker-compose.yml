@@ -17,7 +17,7 @@ services:
       timeout: 20s
       interval: 5s
       retries: 10
-
+      
   golang:
     image: golang:latest
     container_name: golang-container

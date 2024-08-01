@@ -19,7 +19,9 @@ func NewTodoServiceImp(db *gorm.DB) *TodoServiceImp {
 	return &TodoServiceImp{Db: db}
 }
 
-type TodoServiceImp struct{ Db *gorm.DB }
+type TodoServiceImp struct {
+	Db *gorm.DB
+}
 
 func (s *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
 	if todo.ID != 0 {
