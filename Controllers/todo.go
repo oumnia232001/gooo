@@ -3,39 +3,100 @@ package Controllers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	models "github.com/go-todo1/Models"
 	"github.com/go-todo1/services"
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 	"github.com/thedevsaddam/renderer"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-var rnd *renderer.Render = renderer.New()
+var rnd *renderer.Render
 var todoService services.TodoService
 var Database *gorm.DB
 
 func InitRenderAndDB() {
 	InitDatabase()
-	rnd = renderer.New()
-	todoService = services.NewTodoServiceImp(Database)
+	rnd = renderer.New(renderer.Options{
+		ParseGlobPattern: "static/*.tpl",
+	})
+	// Charger la clé API depuis les variables d'environnement
+	apiKey := os.Getenv("RAPIDAPI_KEY")
+	if apiKey == "" {
+		log.Fatal("RAPIDAPI_KEY environment variable not set")
+	}
+	todoService = services.NewTodoServiceImp(Database, apiKey)
 }
 
 func InitDatabase() {
-	var err error
-	dsn := "root:197520012003@tcp(mysql:3306)/todo_list?charset=utf8mb4&parseTime=True&loc=Local"
-	Database, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	// Charger les variables d'environnement depuis le fichier .env
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	// Lire les variables de mot de passe
+	password := os.Getenv("DB_PASSWORD")
+
+	// Configurer viper pour lire le fichier config.yaml
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Error reading config file: %v", err)
+	}
+
+	// Lire les variables de configuration
+	user := viper.GetString("DB_USER")
+	host := viper.GetString("DB_HOST")
+	port := viper.GetString("DB_PORT")
+	name := viper.GetString("DB_NAME")
+
+	// Construire la chaîne de connexion
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", user, password, host, port, name)
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
+	Database = db
+
+	// Assurer la migration de la base de données
+	if !Database.Migrator().HasTable(&models.TodoModel{}) {
+		if err := Database.Migrator().CreateTable(&models.TodoModel{}); err != nil {
+			log.Fatalf("Failed to create table: %v", err)
+		}
+	}
+
+	if err := Database.AutoMigrate(&models.TodoModel{}); err != nil {
+		log.Fatalf("Failed to auto-migrate database: %v", err)
+	}
+
+	log.Println("Database connected and tables ensured")
 }
 
 func GetRenderer() *renderer.Render {
 	return rnd
+}
+
+type MockRenderer struct{}
+
+func (m *MockRenderer) JSON(w http.ResponseWriter, status int, v interface{}, headers ...http.Header) error {
+	w.WriteHeader(status)
+	_, err := w.Write([]byte("mock json response"))
+	return err
+}
+
+func (m *MockRenderer) Template(w http.ResponseWriter, status int, files []string, data interface{}, headers ...http.Header) error {
+	w.WriteHeader(status)
+	_, err := w.Write([]byte("mock template"))
+	return err
 }
 
 func FetchTodos(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +154,7 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
 	rnd.JSON(w, http.StatusCreated, renderer.M{
 		"message": "Todo created successfully",
 		"todo":    createdTodo,
@@ -124,6 +186,7 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
+		log.Printf("Invalid ID: %v", idParam)
 		rnd.JSON(w, http.StatusBadRequest, renderer.M{
 			"message": "Invalid ID",
 		})
@@ -140,6 +203,8 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Updating Todo with ID: %d and Data: %+v", id, t)
+
 	updatedTodo, err := todoService.Update(uint(id), t)
 	if err != nil {
 		log.Printf("Error updating todo: %v", err)
@@ -154,4 +219,20 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		"message": "Todo updated successfully",
 		"todo":    updatedTodo,
 	})
+}
+
+// Nouvelle fonction pour obtenir une citation depuis l'API RapidAPI
+func GetQuoteHandler(w http.ResponseWriter, r *http.Request) {
+	// Appeler la méthode GetQuote du service
+	quote, err := todoService.GetQuote()
+	if err != nil {
+		log.Printf("Error fetching quote: %v", err)
+		rnd.JSON(w, http.StatusInternalServerError, renderer.M{
+			"message": "Failed to fetch quote",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	rnd.JSON(w, http.StatusOK, quote)
 }

@@ -2,12 +2,15 @@ package services_test
 
 import (
 	"database/sql"
+
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+
 	models "github.com/go-todo1/Models"
 	"github.com/go-todo1/services"
 	"github.com/stretchr/testify/assert"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -94,7 +97,7 @@ func TestDeleteTodoService(t *testing.T) {
 			if gormDB == nil && tc.name != "bad id" {
 				t.Fatalf("gormDB is nil")
 			}
-			service := services.NewTodoServiceImp(gormDB) // Utilisez NewTodoServiceImp ici
+			service := services.NewTodoServiceImp(gormDB, "80dda35e2emshd2e339a97923cdcp1ee214jsn9effd6aab9d6") // Utilisez NewTodoServiceImp ici
 			err = service.Delete(tc.id)
 			tc.checkResult(err)
 			if mock != nil {
@@ -172,9 +175,60 @@ func TestCreateTodoService(t *testing.T) {
 			if gormDB == nil {
 				t.Fatalf("gormDB is nil")
 			}
-			service := services.NewTodoServiceImp(gormDB) // Utilisez NewTodoServiceImp ici
+			service := services.NewTodoServiceImp(gormDB, "80dda35e2emshd2e339a97923cdcp1ee214jsn9effd6aab9d6") // Utilisez NewTodoServiceImp ici
 			createdTodo, err := service.Create(tc.todo)
 			tc.checkResult(createdTodo, err)
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+			if sqlDB != nil {
+				sqlDB.Close()
+			}
+		})
+	}
+
+}
+func TestGetQuoteService(t *testing.T) {
+	testCases := []struct {
+		name        string
+		setup       func() (*gorm.DB, sqlmock.Sqlmock, *sql.DB, error)
+		checkResult func(quote models.QuoteResponse, err error)
+	}{
+		{
+			name: "success",
+			setup: func() (*gorm.DB, sqlmock.Sqlmock, *sql.DB, error) {
+				gormDB, mock, sqlDB, err := initMockDB()
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				// Configuration supplémentaire si nécessaire
+				return gormDB, mock, sqlDB, nil
+			},
+			checkResult: func(quote models.QuoteResponse, err error) {
+				assert.Nil(t, err)
+				assert.Greater(t, quote.ID, 0)
+				assert.NotEmpty(t, quote.Content)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gormDB, mock, sqlDB, err := tc.setup()
+			if err != nil {
+				t.Fatalf("Failed to set up test case: %v", err)
+			}
+			if gormDB == nil {
+				t.Fatalf("gormDB is nil")
+			}
+
+			// Créez une nouvelle instance du service
+			service := services.NewTodoServiceImp(gormDB, "80dda35e2emshd2e339a97923cdcp1ee214jsn9effd6aab9d6")
+
+			// Appelez GetQuote sans arguments
+			quote, err := service.GetQuote()
+			tc.checkResult(quote, err)
+
 			if mock != nil {
 				assert.NoError(t, mock.ExpectationsWereMet())
 			}

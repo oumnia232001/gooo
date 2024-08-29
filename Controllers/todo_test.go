@@ -2,6 +2,7 @@ package Controllers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-todo1/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/thedevsaddam/renderer"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -35,6 +37,7 @@ func setupMockDB() *gorm.DB {
 // }
 
 func TestCreateTodo(t *testing.T) {
+	rnd = renderer.New(renderer.Options{})
 	defaultBody := `{
         "title": "sara"
     }`
@@ -185,6 +188,7 @@ func TestDeleteTodo(t *testing.T) {
 }
 
 func TestUpdateTodo(t *testing.T) {
+	rnd = renderer.New(renderer.Options{})
 	testCases := []struct {
 		name        string
 		id          string
@@ -250,6 +254,72 @@ func TestUpdateTodo(t *testing.T) {
 			router.Put("/todos/{id}", UpdateTodo)
 			req := tc.request()
 			router.ServeHTTP(rr, req)
+			tc.checkResult(rr)
+		})
+	}
+
+}
+func TestGetQuote(t *testing.T) {
+	// Create a contrôleur for the  mock
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		name        string
+		request     func() *http.Request
+		setup       func()
+		checkResult func(rr *httptest.ResponseRecorder)
+	}{
+		{
+			name: "success",
+			request: func() *http.Request {
+				req, _ := http.NewRequest("GET", "/quote", nil)
+				return req
+			},
+			setup: func() {
+				// Créer une instance du mock
+				mockTodoService := mocks.NewMockTodoService(ctrl)
+				expectedQuote := models.QuoteResponse{
+					ID:      1,
+					Content: "This is a test quote.",
+				}
+
+				// Configurer le mock pour s'attendre à un appel à GetQuote et renvoyer la réponse attendue
+				mockTodoService.EXPECT().GetQuote().Return(expectedQuote, nil)
+
+				// Remplace the real service bt the  mock
+				todoService = mockTodoService
+			},
+			checkResult: func(rr *httptest.ResponseRecorder) {
+				// Vérifier le code de statut HTTP
+				assert.Equal(t, http.StatusOK, rr.Code)
+
+				// Vérifier le contenu de la réponse
+				expectedQuote := models.QuoteResponse{
+					ID:      1,
+					Content: "This is a test quote.",
+				}
+				expectedResponse, _ := json.Marshal(expectedQuote)
+				assert.Equal(t, string(expectedResponse), rr.Body.String())
+			},
+		},
+	}
+
+	// Exécuter les cas de test
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Initialised the    renderer for the test
+			rnd = renderer.New(renderer.Options{})
+
+			// Configurer la requête et le service
+			req := tc.request()
+			rr := httptest.NewRecorder()
+			tc.setup()
+
+			// Appeler le handler
+			GetQuoteHandler(rr, req)
+
+			// Vérified the résults
 			tc.checkResult(rr)
 		})
 	}

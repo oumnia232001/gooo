@@ -21,18 +21,22 @@ type MockTodoService struct {
 type MockTodoServiceMockRecorder struct {
 	mock *MockTodoService
 }
-
-// NewMockTodoService creates a new mock instance.
-func NewMockTodoService(ctrl *gomock.Controller) *MockTodoService {
-	mock := &MockTodoService{ctrl: ctrl}
-	mock.recorder = &MockTodoServiceMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTodoService) EXPECT() *MockTodoServiceMockRecorder {
 	return m.recorder
 }
+
+
+// NewMockTodoService creates a new mock instance.
+func NewMockTodoService(ctrl *gomock.Controller) *MockTodoService {
+    mock := &MockTodoService{ctrl: ctrl}
+    mock.recorder = &MockTodoServiceMockRecorder{mock}
+    return mock
+}
+
+
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+
 
 // Create mocks base method.
 func (m *MockTodoService) Create(todo Models.TodoModel) (Models.TodoModel, error) {
@@ -77,3 +81,18 @@ func (mr *MockTodoServiceMockRecorder) Update(id, todo interface{}) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTodoService)(nil).Update), id, todo)
 }
+// GetQuote mocks base method.
+func (m *MockTodoService) GetQuote() (Models.QuoteResponse, error) {
+    m.ctrl.T.Helper()
+    ret := m.ctrl.Call(m, "GetQuote")
+    ret0, _ := ret[0].(Models.QuoteResponse)
+    ret1, _ := ret[1].(error)
+    return ret0, ret1
+}
+
+// GetQuote indicates an expected call of GetQuote.
+func (mr *MockTodoServiceMockRecorder) GetQuote() *gomock.Call {
+    mr.mock.ctrl.T.Helper()
+    return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetQuote", reflect.TypeOf((*MockTodoService)(nil).GetQuote))
+}
+
