@@ -58,6 +58,8 @@ func todoHandlers() http.Handler {
 		r.Put("/{id}", controllers.UpdateTodo)
 		r.Delete("/{id}", controllers.DeleteTodo)
 	})
+
+	rg.Get("/quote", controllers.GetQuoteHandler)
 	return rg
 }
 

@@ -1,10 +1,13 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	models "github.com/go-todo1/Models"
 	"gorm.io/gorm"
 )
@@ -13,16 +16,20 @@ type TodoService interface {
 	Create(todo models.TodoModel) (models.TodoModel, error)
 	Update(id uint, todo models.TodoModel) (models.TodoModel, error)
 	Delete(id uint) error
+	GetQuote() (models.QuoteResponse, error)
 }
 
-func NewTodoServiceImp(db *gorm.DB) *TodoServiceImp {
-	return &TodoServiceImp{Db: db}
+func NewTodoServiceImp(db *gorm.DB, apiKey string) *TodoServiceImp {
+	return &TodoServiceImp{Db: db, APIKey: apiKey}
 }
 
 type TodoServiceImp struct {
-	Db *gorm.DB
+	Db      *gorm.DB
+	APIKey  string
+	Service TodoService
 }
 
+// Create
 func (s *TodoServiceImp) Create(todo models.TodoModel) (models.TodoModel, error) {
 	if todo.ID != 0 {
 		return models.TodoModel{}, fmt.Errorf("invalid ID")
@@ -71,4 +78,29 @@ func (s *TodoServiceImp) Delete(id uint) error {
 	}
 
 	return tx.Commit().Error
+}
+
+// Obtient une citation aléatoire de l'API
+func (s *TodoServiceImp) GetQuote() (models.QuoteResponse, error) {
+	client := resty.New()
+
+	resp, err := client.R().
+		SetHeader("X-RapidAPI-Key", s.APIKey).
+		SetHeader("X-RapidAPI-Host", "quotes15.p.rapidapi.com").
+		Get("https://quotes15.p.rapidapi.com/quotes/random/?language_code=en")
+
+	if err != nil {
+		return models.QuoteResponse{}, err
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return models.QuoteResponse{}, fmt.Errorf("unexpected response code %d", resp.StatusCode())
+	}
+
+	var quoteResp models.QuoteResponse
+	if err := json.Unmarshal(resp.Body(), &quoteResp); err != nil {
+		return models.QuoteResponse{}, err
+	}
+
+	return quoteResp, nil
 }
